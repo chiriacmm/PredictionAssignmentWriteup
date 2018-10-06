@@ -1,0 +1,233 @@
+---
+title: "Prediction Assignment Writeup"
+author: "Mihai Chiriac"
+date: "September 26, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+##Overview
+
+The project's goal is predicting the manner in which 6 participants performed some fiteness exercises. The machine learning algorithm is applied at the end to the 20 test cases available in the test data.
+
+
+## Import libraries and environment variables setup
+
+```{r message=FALSE,warning=FALSE}
+
+library(knitr)
+library(caret)
+library(rpart)
+library(rpart.plot)
+library(rattle)
+library(randomForest)
+library(corrplot)
+library(RCurl)
+library(e1071)
+library(gbm)
+
+set.seed(1234)
+
+setwd("C:\\Users\\Mihai Chiriac\\Google Drive\\__Shared__\\Cursuri\\DataScience\\DataScienceSpecFiles\\Project-PredictionAssignmentWriteup")
+
+```
+
+## Download data
+
+```{r}
+
+if (!file.exists("./data")) {
+  dir.create("./data")
+}
+
+if (!file.exists("./data/pml-training.csv")) {
+  url.training <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+  download.file(url.training, destfile = "./data/pml-training.csv")
+}
+
+if (!file.exists("./data/pml-testing.csv")) {
+  url.testing <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+  download.file(url.testing, destfile = "./data/pml-testing.csv")
+}
+
+
+```
+
+##Reading and partitioning data
+
+
+```{r}
+
+  trainingSet <- read.csv("./data/pml-training.csv")
+  testingSet <- read.csv("./data/pml-testing.csv")
+
+
+# create a partition using caret with the training dataset on 70,30 ratio
+inTrain  <- createDataPartition(trainingSet$classe, p=0.7, list=FALSE)
+
+TrainSet <- trainingSet[inTrain, ]
+
+TestSet  <- trainingSet[-inTrain, ]
+
+
+```
+
+###Cleaning data
+
+
+```{r}
+dim(TrainSet)
+```
+```{r}
+dim(TestSet)
+
+```
+Both datasets have the same number of variables (160 variables). Next steps remove the near zero variance variables, missing value or unused columns.
+
+
+
+```{r}
+
+
+# remove variables with Nearly Zero Variance using Caret's nearZeroVar function
+zeroValueColumns <- nearZeroVar(TrainSet)
+
+TrainSet <- TrainSet[, -zeroValueColumns]
+TestSet  <- TestSet[, -zeroValueColumns]
+testingSet <- testingSet[, -zeroValueColumns]
+
+
+# Delete columns with missing values
+TrainSet <- TrainSet[,colSums(is.na(TrainSet)) == 0]
+TestSet <- TestSet[,colSums(is.na(TestSet)) == 0]
+testingSet <- testingSet[,colSums(is.na(testingSet)) == 0]
+
+# Delete unused columns
+TrainSet <- TrainSet[,-c(1:7)]
+TestSet <- TestSet[,-c(1:7)]
+testingSet <- testingSet[,-c(1:7)]
+
+dim(TrainSet)
+dim(TestSet)
+dim(testingSet)
+
+
+```
+
+
+##Coorelation analysis
+
+A correlation among variables is analysed before proceeding to the modeling procedures.
+
+```{r}
+    corMatrix <- cor(TrainSet[, -52])
+    corrplot(corMatrix, order = "FPC", method = "color", type = "lower", 
+         tl.cex = 0.8, tl.col = rgb(0, 0, 0))
+
+```
+
+The highly correlated variables are shown in dark colors in the above. graph 
+
+
+##Data Prediction and Modelling
+
+
+###Random Forest
+
+```{R}
+# model fit
+controlRandForest <- trainControl(method="cv", number=5, verboseIter=FALSE)
+modFitRandForest <- train(classe ~ ., data=TrainSet, method="rf", trControl=controlRandForest, ntree=250)
+modFitRandForest$finalModel
+
+```
+
+
+```{r}
+# prediction on Test dataset
+predictRandForest <- predict(modFitRandForest, newdata=TestSet)
+confMatRandForest <- confusionMatrix(predictRandForest, TestSet$classe)
+confMatRandForest
+
+```
+
+### Decision Tree
+
+
+```{r}
+
+# model fit
+modFitDecTree <- rpart(classe ~ ., data=TrainSet, method="class")
+fancyRpartPlot(modFitDecTree)
+
+```
+
+
+```{r}
+
+# prediction on Test dataset
+predictDecTree <- predict(modFitDecTree, newdata=TestSet, type="class")
+confMatDecTree <- confusionMatrix(predictDecTree, TestSet$classe)
+confMatDecTree
+
+```
+
+
+###Generalized Boosted Model (GBM)
+
+```{r}
+
+# model fit
+controlGBM <- trainControl(method = "repeatedcv", number = 5, repeats = 1)
+modFitGBM  <- train(classe ~ ., data=TrainSet, method = "gbm", trControl = controlGBM, verbose = FALSE)
+
+```
+
+
+```{r}
+modFitGBM$finalModel
+```
+
+
+```{r}
+
+# prediction on Test dataset
+predictGBM <- predict(modFitGBM, newdata=TestSet)
+confMatGBM <- confusionMatrix(predictGBM, TestSet$classe)
+confMatGBM
+
+```
+
+
+##Applying the selected Model to the Test Data
+The accuracy of the 3 regression modeling methods above are:
+
+Random Forest : 0.9968 
+Decision Tree : 0.8291 
+GBM : 0.9884 
+
+Random Forest appers to have the best results but as exercise all three models will be applied to predict the 20 quiz results (testingSet dataset) as shown below.
+
+```{r}
+
+predictTEST <- predict(modFitRandForest, newdata=testingSet)
+predictTEST
+
+predictDecTreeTEST <- predict(modFitDecTree, newdata=testingSet, type="class")
+predictDecTreeTEST
+
+predictGBMTEST <- predict(modFitGBM, newdata=testingSet)
+predictGBMTEST
+
+```
+
+
+
+
+
+
+
