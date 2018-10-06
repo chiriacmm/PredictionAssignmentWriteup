@@ -32,7 +32,7 @@ library(gbm)
 
 set.seed(1234)
 
-setwd("C:\\Users\\Mihai Chiriac\\Google Drive\\__Shared__\\Cursuri\\DataScience\\DataScienceSpecFiles\\Project-PredictionAssignmentWriteup")
+setwd("C:\\Project-PredictionAssignmentWriteup")
 
 ```
 
